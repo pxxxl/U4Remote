@@ -1,0 +1,26 @@
+unzip i3dv
+cd i3dv
+conda env create -f vru.yaml 
+conda activate vru
+cd submodules
+unzip diff-gaussian-rasterization.zip
+unzip gridencoder.zip
+unzip simple-knn.zip
+pip install ./diff-gaussian-rasterization
+pip install ./gridencoder
+pip install ./simple-knn
+cd ..
+
+# 修改一下脚本里的路径
+python ./data_process/video2stream.py
+
+# copy I3DV/camera_distorted/sg 里面的sparse和distorted两个文件夹到I3DV/i3DV1.0/dataset/Show_Groups_4K/frame000000 里面
+
+# 运行复制
+python ./data_process/copy_cams.py --source /home/ethan/Project/Python/I3DV/dataset/Dance_Dunhuang_Pair_1080/frame000000 --scene /home/ethan/Project/Python/I3DV/dataset/Dance_Dunhuang_Pair_1080
+
+python ./data_process/copy_cams.py --source ~/autodl-tmp/I3DV/dataset/Dance_Dunhuang_Pair_1080/frame000000 --scene ~/autodl-tmp/I3DV/dataset/Dance_Dunhuang_Pair_1080
+
+# 去歧变
+  python convert_frames.py -s ~/autodl-tmp/I3DV/dataset/Dance_Dunhuang_Pair_1080
+

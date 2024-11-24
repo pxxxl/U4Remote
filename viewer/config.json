@@ -1,0 +1,20 @@
+{   
+    "GOF": 500,
+
+    "model_params":
+    {
+        "sh_degree": 3,
+        "feat_dim": 50,
+        "n_offsets": 10,
+        "voxel_size": 0.001
+    },
+
+    "ntc_cfg":
+    {
+        "n_features_per_level": 4,
+        "resolutions_list": [16, 23, 32, 46, 64, 92, 128, 184, 256, 368, 512, 736, 1024],
+        "log2_hashmap_size": 17,
+        "resolutions_list_2D": [512, 1024, 2048, 4096],
+        "log2_hashmap_size_2D": 15
+    }
+}
