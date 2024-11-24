@@ -1,2 +1,4 @@
 outputs_avs/
 submodules/
+__pycache__/
+*.pyc
