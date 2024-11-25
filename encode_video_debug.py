@@ -103,6 +103,7 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
         mode = "I_frame"
     )
     gaussians.set_steps(args_param.step_flag1, args_param.step_flag2)
+    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio)
 
     if init:
         scene = Scene(dataset, gaussians, ply_path=ply_path)
@@ -783,6 +784,8 @@ if __name__ == "__main__":
             args.model_path = os.path.join(base_model_path, scene, f"{lmbda}_{P_lmbda}", f"frame{frame:06d}")
             os.makedirs(args.model_path, exist_ok=True)
             logger = get_logger(args.model_path)
+
+            args.entropy_skipping_ratio = None
 
             if frame == 0: # init_frame
                 for key, value in config["Init_frame_params"].items():

@@ -16,7 +16,7 @@ def init_recorder(filename: str, folder: str = "."):
     with open(_log_file_path, 'w') as file:
         pass  # 创建空文件
 
-def record(tags: list[str], content: str):
+def record(tags, content: str):
     """
     记录日志到文件。
 

@@ -31,7 +31,7 @@ class Entropy_gaussian(nn.Module):
     def __init__(self, Q=1):
         super(Entropy_gaussian, self).__init__()
         self.Q = Q
-    def forward(self, x, mean, scale, Q=None, x_mean=None):
+    def forward(self, x, mean, scale, Q=None, x_mean=None, gaussian_skipping_ratio=0.0):
         if Q is None:
             Q = self.Q
         if use_clamp:
@@ -41,6 +41,12 @@ class Entropy_gaussian(nn.Module):
             x_max = x_mean + 15_000 * Q
             x = torch.clamp(x, min=x_min.detach(), max=x_max.detach())
         scale = torch.clamp(scale, min=1e-9)
+
+        if gaussian_skipping_ratio > 0.0:
+            threshold = torch.quantile(scale, gaussian_skipping_ratio)
+            mask = scale <= threshold
+            x = torch.where(mask, mean, x)
+
         m1 = torch.distributions.normal.Normal(mean, scale)
         lower = m1.cdf(x - 0.5*Q)
         upper = m1.cdf(x + 0.5*Q)

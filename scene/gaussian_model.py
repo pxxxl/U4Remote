@@ -503,6 +503,9 @@ class GaussianModel(nn.Module):
     def set_steps(self, flag_1, flag_2):
         self.step_flag1 = flag_1
         self.step_flag2 = flag_2
+
+    def set_entropy_skipping(self, entropy_skipping_ratio):
+        self.entropy_skipping_ratio = entropy_skipping_ratio
     
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense

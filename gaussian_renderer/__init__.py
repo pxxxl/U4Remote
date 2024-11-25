@@ -79,7 +79,10 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 Q_feat = Q_feat[choose_idx]
                 Q_scaling = Q_scaling[choose_idx]
                 Q_offsets = Q_offsets[choose_idx]
-                bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
+                if pc.entropy_skipping_ratio is not None:
+                    bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), gaussian_skipping_ratio=pc.entropy_skipping_ratio)
+                else:
+                    bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                 bit_scaling = pc.entropy_gaussian.forward(grid_scaling_chosen, mean_scaling, scale_scaling, Q_scaling, pc.get_scaling.mean())
                 bit_offsets = pc.entropy_gaussian.forward(grid_offsets_chosen, mean_offsets, scale_offsets, Q_offsets, pc._offset.mean())
                 bit_per_feat_param = torch.sum(bit_feat) / bit_feat.numel()
