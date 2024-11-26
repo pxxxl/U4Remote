@@ -46,7 +46,7 @@ from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from utils.encodings import anchor_round_digits, Q_anchor, encoder_anchor, get_binary_vxl_size
-
+from utils.recorder import init_recorder, record
 # torch.set_num_threads(32)
 # lpips_fn = lpips.LPIPS(net='vgg').to('cuda')
 
@@ -404,6 +404,7 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                     with torch.no_grad():
                         log_info = scene.gaussians.estimate_final_bits()
                         logger.info(log_info)
+                        record([dataset_name, "EstimateSize"], log_info)
                 if run_codec:  # conduct encoding and decoding
                     with torch.no_grad():
                         bit_stream_path = os.path.join(pre_path_name, f"iteration_{iteration}",'bitstreams')
@@ -412,16 +413,20 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                             # conduct encoding
                             patched_infos, log_info = scene.gaussians.conduct_encoding(pre_path_name=bit_stream_path)
                             logger.info(log_info)
+                            record([dataset_name, "IEncodingInfo"], log_info)
                             # conduct decoding
                             log_info = scene.gaussians.conduct_decoding(pre_path_name=bit_stream_path, patched_infos=patched_infos)
                             logger.info(log_info)
+                            record([dataset_name, "IDecodingInfo"], log_info)
                         elif mode == "P_frame":
                             # conduct encoding
                             patched_infos, log_info = scene.gaussians.conduct_encoding_for_ntc(pre_path_name=bit_stream_path)
                             logger.info(log_info)
+                            record([dataset_name, "PEncodingInfo"], log_info)
                             # conduct decoding
                             log_info = scene.gaussians.conduct_decoding_for_ntc(pre_path_name=bit_stream_path, patched_infos=patched_infos)
                             logger.info(log_info)
+                            record([dataset_name, "PDecodingInfo"], log_info)
             torch.cuda.empty_cache()
             validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},
                                   {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
@@ -473,8 +478,13 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                     lpips_test /= len(config['cameras'])
                     l1_test /= len(config['cameras'])
                     logger.info("\n[ITER {}] Evaluating {}: L1 {} PSNR {} ssim {} lpips {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
+                    record([dataset_name, config['name'], "Evaluating", 'L1'], str(l1_test))
+                    record([dataset_name, config['name'], "Evaluating", 'PSNR'], str(psnr_test))
+                    record([dataset_name, config['name'], "Evaluating", 'ssim'], str(ssim_test))
+                    record([dataset_name, config['name'], "Evaluating", 'lpips'], str(lpips_test))
                     test_fps = 1.0 / torch.tensor(t_list[0:]).mean()
                     logger.info(f'Test FPS: {test_fps.item():.5f}')
+                    record([dataset_name, config['name'], "Evaluating", 'FPS'], str(test_fps.item()))
                     if tb_writer:
                         tb_writer.add_scalar(f'{dataset_name}/test_FPS', test_fps.item(), 0)
                     if wandb is not None:
@@ -580,6 +590,7 @@ def render_sets(args_param, dataset : ModelParams, iteration : int, pipeline : P
             t_train_list, _  = render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background)
             train_fps = 1.0 / torch.tensor(t_train_list[5:]).mean()
             logger.info(f'Train FPS: \033[1;35m{train_fps.item():.5f}\033[0m')
+            record([dataset.model_path, "Render", "TrainFPS"], f"{train_fps.item():.5f}")
             if wandb is not None:
                 wandb.log({"train_fps":train_fps.item(), })
 
@@ -591,6 +602,7 @@ def render_sets(args_param, dataset : ModelParams, iteration : int, pipeline : P
             # test_fps = 1.0 / torch.tensor(t_test_list[5:]).mean()
             test_fps = 1.0 / torch.tensor(t_test_list).mean()
             logger.info(f'Test FPS: \033[1;35m{test_fps.item():.5f}\033[0m')
+            record([dataset.model_path, "Render", "TestFPS"], f"{test_fps.item():.5f}")
             if tb_writer:
                 tb_writer.add_scalar(f'{dataset_name}/test_FPS', test_fps.item(), 0)
             if wandb is not None:
@@ -659,6 +671,9 @@ def evaluate(model_paths, visible_count=None, wandb=None, tb_writer=None, datase
         logger.info("  PSNR : \033[1;35m{:>12.7f}\033[0m".format(torch.tensor(psnrs).mean(), ".5"))
         logger.info("  LPIPS: \033[1;35m{:>12.7f}\033[0m".format(torch.tensor(lpipss).mean(), ".5"))
         print("")
+        record([model_paths, "EvaluateFunc", "SSIM"], torch.tensor(ssims).mean())
+        record([model_paths, "EvaluateFunc", "PSNR"], torch.tensor(psnrs).mean())
+        record([model_paths, "EvaluateFunc", "LPIPS"], torch.tensor(lpipss).mean())
 
 
         if tb_writer:
@@ -733,7 +748,7 @@ if __name__ == "__main__":
     parser.add_argument("--lmbda", type=float, default = 0.001)
     parser.add_argument("--config_path", type=str, default = None)
     parser.add_argument("--init_name", type=str, default = None)
-
+    init_recorder('record_bit_17.txt')
     args = parser.parse_args(sys.argv[1:])
 
     # Initialize system state (RNG)
