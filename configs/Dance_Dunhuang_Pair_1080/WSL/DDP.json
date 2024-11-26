@@ -43,7 +43,7 @@
         "step_flag2": 80,
 
         "entropy_skipping_ratio": 0,
-        "enable_learned_anchor_digits": true
+        "enable_learned_anchor_digits": false
     },
 
     "I_frame_params":
@@ -60,7 +60,7 @@
         "ref_iter": 50,
 
         "entropy_skipping_ratio": 0,
-        "enable_learned_anchor_digits": true
+        "enable_learned_anchor_digits": false
     },
 
     "P_frame_params":

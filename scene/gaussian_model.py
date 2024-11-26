@@ -1150,7 +1150,14 @@ class GaussianModel(nn.Module):
         offsets = (STE_multistep.apply(_grid_offsets, Q_offsets.unsqueeze(1))).detach()
         offsets = offsets.view(-1, 3*self.n_offsets)
 
-        bit_feat = self.entropy_gaussian.forward(_feat, mean, scale, Q_feat)
+        # bit_feat_raw = self.entropy_gaussian.forward(_feat, mean, scale, Q_feat)
+        if self.entropy_skipping_ratio is not None:
+            copy_feat = _feat.clone()
+            bit_feat = self.entropy_gaussian.forward(copy_feat, mean, scale, Q_feat, gaussian_skipping_ratio=self.entropy_skipping_ratio)
+        else:
+            bit_feat = self.entropy_gaussian.forward(_feat, mean, scale, Q_feat)
+
+        # print(bit_feat_raw.mean(), bit_feat.mean())
         bit_scaling = self.entropy_gaussian.forward(grid_scaling, mean_scaling, scale_scaling, Q_scaling)
         bit_offsets = self.entropy_gaussian.forward(offsets, mean_offsets, scale_offsets, Q_offsets)
 
@@ -1257,7 +1264,10 @@ class GaussianModel(nn.Module):
             feat = _feat[N_start:N_end][indices].view(-1)  # [N_num*32]
             feat = STE_multistep.apply(feat, Q_feat, _feat.mean())
             torch.cuda.synchronize(); t0 = time.time()
-            bit_feat, min_feat, max_feat = encoder_gaussian(feat, mean, scale, Q_feat, file_name=feat_b_name)
+            if self.entropy_skipping_ratio is not None:
+                bit_feat, min_feat, max_feat = encoder_gaussian(feat, mean, scale, Q_feat, file_name=feat_b_name, gaussian_skipping_ratio=self.entropy_skipping_ratio)
+            else:
+                bit_feat, min_feat, max_feat = encoder_gaussian(feat, mean, scale, Q_feat, file_name=feat_b_name)
             torch.cuda.synchronize(); t_codec += time.time() - t0
             bit_feat_list.append(bit_feat)
             min_feat_list.append(int(min_feat.cpu().item()))

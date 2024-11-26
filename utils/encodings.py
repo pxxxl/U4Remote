@@ -82,18 +82,21 @@ def multiprocess_deoder(lower, file_name, chunk_num=10):
     output_list = torch.cat(list(output_list), dim=0).cuda()
     return output_list
 
-
-def encoder_gaussian(x, mean, scale, Q, file_name='tmp.b'):
+def encoder_gaussian(x, mean, scale, Q, gaussian_skipping_ratio=0.0, file_name='tmp.b'):
     assert file_name.endswith('.b')
     if not isinstance(Q, torch.Tensor):
         Q = torch.tensor([Q], dtype=mean.dtype, device=mean.device).repeat(mean.shape[0])
     assert x.shape == mean.shape == scale.shape == Q.shape
+    if gaussian_skipping_ratio > 0:
+        threshold = torch.quantile(scale, gaussian_skipping_ratio, dim=-1, keepdim=True)
+        mask = scale <= threshold
+        x = torch.where(mask, mean, x)
     x_int_round = torch.round(x / Q)  # [100]
     max_value = x_int_round.max()
     min_value = x_int_round.min()
     samples = torch.tensor(range(int(min_value.item()), int(max_value.item()) + 1 + 1)).to(
-        torch.float).to(x.device)  # from min_value to max_value+1. shape = [max_value+1+1 - min_value]
-    samples = samples.unsqueeze(0).repeat(mean.shape[0], 1)  # [100, max_value+1+1 - min_value]
+        torch.float).to(x.device)  # from min_value to max_value + 1. shape = [max_value + 1 + 1 - min_value]
+    samples = samples.unsqueeze(0).repeat(mean.shape[0], 1)  # [100, max_value + 1 + 1 - min_value]
     mean = mean.unsqueeze(-1).repeat(1, samples.shape[-1])
     scale = scale.unsqueeze(-1).repeat(1, samples.shape[-1])
     GD = torch.distributions.normal.Normal(mean, scale)
@@ -104,18 +107,49 @@ def encoder_gaussian(x, mean, scale, Q, file_name='tmp.b'):
     del GD
     x_int_round_idx = (x_int_round - min_value).to(torch.int16)
     assert (x_int_round_idx.to(torch.int32) == x_int_round - min_value).all()
-    # if x_int_round_idx.max() >= lower.shape[-1] - 1:  x_int_round_idx.max() exceed 65536 but to int6, that's why error
-        # assert False
-
     if not use_multiprocessor:
         byte_stream = torchac.encode_float_cdf(lower.cpu(), x_int_round_idx.cpu(), check_input_bounds=True)
         with open(file_name, 'wb') as fout:
             fout.write(byte_stream)
-        bit_len = len(byte_stream)*8
+        bit_len = len(byte_stream) * 8
     else:
         bit_len = multiprocess_encoder(lower.cpu(), x_int_round_idx.cpu(), file_name)
     torch.cuda.empty_cache()
     return bit_len, min_value, max_value
+
+# def encoder_gaussian(x, mean, scale, Q, file_name='tmp.b'):
+#     assert file_name.endswith('.b')
+#     if not isinstance(Q, torch.Tensor):
+#         Q = torch.tensor([Q], dtype=mean.dtype, device=mean.device).repeat(mean.shape[0])
+#     assert x.shape == mean.shape == scale.shape == Q.shape
+#     x_int_round = torch.round(x / Q)  # [100]
+#     max_value = x_int_round.max()
+#     min_value = x_int_round.min()
+#     samples = torch.tensor(range(int(min_value.item()), int(max_value.item()) + 1 + 1)).to(
+#         torch.float).to(x.device)  # from min_value to max_value+1. shape = [max_value+1+1 - min_value]
+#     samples = samples.unsqueeze(0).repeat(mean.shape[0], 1)  # [100, max_value+1+1 - min_value]
+#     mean = mean.unsqueeze(-1).repeat(1, samples.shape[-1])
+#     scale = scale.unsqueeze(-1).repeat(1, samples.shape[-1])
+#     GD = torch.distributions.normal.Normal(mean, scale)
+#     lower = GD.cdf((samples - 0.5) * Q.unsqueeze(-1))
+#     del samples
+#     del mean
+#     del scale
+#     del GD
+#     x_int_round_idx = (x_int_round - min_value).to(torch.int16)
+#     assert (x_int_round_idx.to(torch.int32) == x_int_round - min_value).all()
+#     # if x_int_round_idx.max() >= lower.shape[-1] - 1:  x_int_round_idx.max() exceed 65536 but to int6, that's why error
+#         # assert False
+
+#     if not use_multiprocessor:
+#         byte_stream = torchac.encode_float_cdf(lower.cpu(), x_int_round_idx.cpu(), check_input_bounds=True)
+#         with open(file_name, 'wb') as fout:
+#             fout.write(byte_stream)
+#         bit_len = len(byte_stream)*8
+#     else:
+#         bit_len = multiprocess_encoder(lower.cpu(), x_int_round_idx.cpu(), file_name)
+#     torch.cuda.empty_cache()
+#     return bit_len, min_value, max_value
 
 
 def decoder_gaussian(mean, scale, Q, file_name='tmp.b', min_value=-100, max_value=100):

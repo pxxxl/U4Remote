@@ -80,7 +80,9 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 Q_scaling = Q_scaling[choose_idx]
                 Q_offsets = Q_offsets[choose_idx]
                 if pc.entropy_skipping_ratio is not None:
+                    bit_feat_raw = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                     bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), gaussian_skipping_ratio=pc.entropy_skipping_ratio)
+                    print(bit_feat_raw.mean(), bit_feat.mean())
                 else:
                     bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                 bit_scaling = pc.entropy_gaussian.forward(grid_scaling_chosen, mean_scaling, scale_scaling, Q_scaling, pc.get_scaling.mean())

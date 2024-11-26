@@ -1,3 +1,5 @@
+config_path = "/home/ethan/Project/Python/I3DV/i3DV1.0/configs/Dance_Dunhuang_Pair_1080/WSL/DDP_ES1.json"
+
 #
 # Copyright (C) 2023, Inria
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
@@ -748,12 +750,14 @@ if __name__ == "__main__":
     parser.add_argument("--lmbda", type=float, default = 0.001)
     parser.add_argument("--config_path", type=str, default = None)
     parser.add_argument("--init_name", type=str, default = None)
-    init_recorder('record_bit_17.txt')
+    
     args = parser.parse_args(sys.argv[1:])
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
-    args.config_path = '/home/ethan/Project/Python/I3DV/i3DV1.0/configs/Dance_Dunhuang_Pair_1080/Entropy_Skipping/Dance_Dunhuang_Pair_1080_0.0001_2.0_0.3.json'
+    args.config_path = config_path
+    config_basename = os.path.splitext(os.path.basename(config_path))[0]
+    init_recorder('record_' + config_basename + '.txt')
 
     assert args.config_path is not None, "Please provide a config path"
     with open(args.config_path, 'r') as f:
