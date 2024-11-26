@@ -28,7 +28,7 @@ from utils.system_utils import mkdir_p
 from utils.entropy_models import Entropy_bernoulli, Entropy_gaussian, Entropy_factorized
 
 from utils.encodings import \
-    STE_binary, STE_multistep, Quantize_anchor, \
+    STE_binary, STE_multistep, Quantize_anchor, QuantizeAnchorModule,\
     GridEncoder, \
     anchor_round_digits, Q_anchor, \
     encoder_anchor, decoder_anchor, \
@@ -369,8 +369,12 @@ class GaussianModel(nn.Module):
     def get_anchor(self):
         if self.decoded_version:
             return self._anchor
-        anchor, quantized_v = Quantize_anchor.apply(self._anchor, self.x_bound_min, self.x_bound_max)
-        return anchor
+        if self.quantize_anchor_model is not None:
+            anchor, quantized_v = self.quantize_anchor_model(self._anchor, self.x_bound_min, self.x_bound_max)
+            return anchor
+        else:
+            anchor, quantized_v = Quantize_anchor.apply(self._anchor, self.x_bound_min, self.x_bound_max)
+            return anchor
 
     @torch.no_grad()
     def update_anchor_bound(self, resize=False):
@@ -506,6 +510,13 @@ class GaussianModel(nn.Module):
 
     def set_entropy_skipping(self, entropy_skipping_ratio):
         self.entropy_skipping_ratio = entropy_skipping_ratio
+
+    def set_learned_anchor_digits(self, enable_learned_anchor_digits):
+        if enable_learned_anchor_digits is None or enable_learned_anchor_digits == False:
+            self.quantize_anchor_model = None
+        else:
+            self.quantize_anchor_model = QuantizeAnchorModule()
+
     
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
@@ -1153,6 +1164,8 @@ class GaussianModel(nn.Module):
             bit_hash = hash_embeddings.numel()*32
 
         print(bit_anchor, bit_feat, bit_scaling, bit_offsets, bit_hash)
+        if self.quantize_anchor_model is not None:
+            print("Quantize anchor model final bits: ", self.quantize_anchor_model._anchor_round_digits_raw.detach())
 
         log_info = f"\nEstimated sizes in MB: " \
                    f"anchor {round(bit_anchor/bit2MB_scale, 4)}, " \

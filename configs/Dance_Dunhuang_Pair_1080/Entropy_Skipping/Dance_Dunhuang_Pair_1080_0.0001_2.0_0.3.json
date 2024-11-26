@@ -42,7 +42,8 @@
         "step_flag1": 40,
         "step_flag2": 80,
 
-        "entropy_skipping_ratio": 0.3
+        "entropy_skipping_ratio": 0.3,
+        "enable_learned_anchor_digits": true
     },
 
     "I_frame_params":
@@ -58,7 +59,8 @@
         "step_flag2": 80,
         "ref_iter": 50,
 
-        "entropy_skipping_ratio": 0.3
+        "entropy_skipping_ratio": 0.3,
+        "enable_learned_anchor_digits": true
     },
 
     "P_frame_params":

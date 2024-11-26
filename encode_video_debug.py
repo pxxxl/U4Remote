@@ -104,6 +104,7 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
     )
     gaussians.set_steps(args_param.step_flag1, args_param.step_flag2)
     gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio)
+    gaussians.set_learned_anchor_digits(args_param.enable_learned_anchor_digits)
 
     if init:
         scene = Scene(dataset, gaussians, ply_path=ply_path)
@@ -737,7 +738,7 @@ if __name__ == "__main__":
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
-    args.config_path = '/home/ethan/Project/Python/I3DV/i3DV1.0/configs/Dance_Dunhuang_Pair_1080/Dance_Dunhuang_Pair_1080_0.0001_2.0.json'
+    args.config_path = '/home/ethan/Project/Python/I3DV/i3DV1.0/configs/Dance_Dunhuang_Pair_1080/Entropy_Skipping/Dance_Dunhuang_Pair_1080_0.0001_2.0_0.3.json'
 
     assert args.config_path is not None, "Please provide a config path"
     with open(args.config_path, 'r') as f:
@@ -786,6 +787,7 @@ if __name__ == "__main__":
             logger = get_logger(args.model_path)
 
             args.entropy_skipping_ratio = None
+            args.enable_learned_anchor_digits = None
 
             if frame == 0: # init_frame
                 for key, value in config["Init_frame_params"].items():

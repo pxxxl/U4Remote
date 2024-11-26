@@ -305,6 +305,34 @@ class Quantize_anchor(torch.autograd.Function):
         return grad_output, None, None
 
 
+class QuantizeAnchorModule(nn.Module):
+    def __init__(self, initial_round_digits=anchor_round_digits, min_digits=1, max_digits=32):
+        super(QuantizeAnchorModule, self).__init__()
+        # Raw trainable parameter
+        self._anchor_round_digits_raw = nn.Parameter(torch.tensor(initial_round_digits, dtype=torch.float32))
+        # Range for anchor_round_digits
+        self.min_digits = min_digits
+        self.max_digits = max_digits
+
+    def forward(self, anchors, min_v, max_v):
+        # Map raw value to an integer within the allowed range
+        anchor_round_digits = torch.clamp(torch.round(self._anchor_round_digits_raw), self.min_digits, self.max_digits)
+        
+        # Compute scales based on integer anchor_round_digits
+        scales = 2 ** anchor_round_digits - 1
+        interval = ((max_v - min_v) / scales + 1e-6)  # Avoid division by zero
+        
+        # Quantization
+        quantized_v = torch.div(anchors - min_v, interval, rounding_mode='floor')
+        quantized_v = torch.clamp(quantized_v, 0, scales.item())
+        
+        # Reconstruct quantized anchors
+        anchors_q = quantized_v * interval + min_v
+        
+        return anchors_q, quantized_v
+
+
+
 class _grid_encode(Function):
     @staticmethod
     @custom_fwd
