@@ -545,6 +545,9 @@ class GaussianModel(nn.Module):
 
         ]
 
+        if self.quantize_anchor_model is not None:
+            l.append({'params': self.quantize_anchor_model.parameters(), 'lr': training_args.learned_anchor_digits_lr_init, "name": "quantize_anchor_model"})
+
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
         self.anchor_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
@@ -581,6 +584,15 @@ class GaussianModel(nn.Module):
                                                     max_steps=training_args.mlp_grid_lr_max_steps,
                                                          step_sub=0 if self.ste_binary else 10000,
                                                          )
+        
+        if self.quantize_anchor_model is not None:
+            self.anchor_quantize_scheduler_args = get_expon_lr_func(
+                lr_init=training_args.learned_anchor_digits_lr_init,
+                lr_final=training_args.learned_anchor_digits_lr_final,
+                lr_delay_mult=training_args.learned_anchor_digits_lr_delay_mult,
+                max_steps=training_args.learned_anchor_digits_lr_max_steps,
+                step_sub=0 if self.ste_binary else 10000,
+            )
 
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
@@ -605,6 +617,9 @@ class GaussianModel(nn.Module):
                 param_group['lr'] = lr
             if param_group["name"] == "mlp_grid":
                 lr = self.mlp_grid_scheduler_args(iteration)
+                param_group['lr'] = lr
+            if param_group["name"] == "quantize_anchor_model":
+                lr = self.anchor_quantize_scheduler_args(iteration)
                 param_group['lr'] = lr
     
     def training_setup_for_P_frame(self, ntc_cfg, stage):
@@ -827,7 +842,7 @@ class GaussianModel(nn.Module):
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
-            if 'mlp' in group['name'] or 'conv' in group['name'] or 'feat_base' in group['name'] or 'encoding' in group['name']:
+            if 'mlp' in group['name'] or 'conv' in group['name'] or 'feat_base' in group['name'] or 'encoding' in group['name'] or 'quantize' in group['name']:
                 continue
             assert len(group["params"]) == 1
             extension_tensor = tensors_dict[group["name"]]
@@ -872,7 +887,7 @@ class GaussianModel(nn.Module):
     def _prune_anchor_optimizer(self, mask):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
-            if 'mlp' in group['name'] or 'conv' in group['name'] or 'feat_base' in group['name'] or 'encoding' in group['name']:
+            if 'mlp' in group['name'] or 'conv' in group['name'] or 'feat_base' in group['name'] or 'encoding' in group['name'] or 'quantize' in group['name']:
                 continue
 
             stored_state = self.optimizer.state.get(group['params'][0], None)

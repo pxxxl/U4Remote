@@ -128,6 +128,11 @@ class OptimizationParams(ParamGroup):
         self.mlp_grid_lr_delay_mult = 0.01
         self.mlp_grid_lr_max_steps = 30_000
 
+        self.learned_anchor_digits_lr_init = 0.0001
+        self.learned_anchor_digits_lr_final = 0.0001
+        self.learned_anchor_digits_lr_delay_mult = 0.01
+        self.learned_anchor_digits_lr_max_steps = 30_000
+
         self.percent_dense = 0.01
         self.lambda_dssim = 0.2
         

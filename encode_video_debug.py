@@ -1,4 +1,4 @@
-config_path = "/home/ethan/Project/Python/I3DV/i3DV1.0/configs/Dance_Dunhuang_Pair_1080/WSL/DDP_ES1.json"
+config_path = "/home/ethan/Project/Python/I3DV/i3DV1.0/configs/Dance_Dunhuang_Pair_1080/WSL/DDP_LB1.json"
 
 #
 # Copyright (C) 2023, Inria
@@ -49,6 +49,7 @@ from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from utils.encodings import anchor_round_digits, Q_anchor, encoder_anchor, get_binary_vxl_size
 from utils.recorder import init_recorder, record
+from torchviz import make_dot
 # torch.set_num_threads(32)
 # lpips_fn = lpips.LPIPS(net='vgg').to('cuda')
 
@@ -239,7 +240,23 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
                 torch.cuda.empty_cache()
 
             if iteration < opt.iterations:
+
+                before_p9 = gaussians.optimizer.param_groups[9]['params'][0].data.clone()
+
                 gaussians.optimizer.step()
+
+                after_p9 = gaussians.optimizer.param_groups[9]['params'][0].data.clone()
+
+                if iteration == 90:
+                    # 假设 gaussians 和 loss 已定义
+                    param = gaussians.optimizer.param_groups[5]['params'][0]  # 提取目标参数
+
+                # print(torch.sum(gaussians.optimizer.param_groups[0]['params'][0]).item())
+
+
+                # gaussians.optimizer.step()
+
+
                 gaussians.optimizer.zero_grad(set_to_none = True)
             if (iteration in checkpoint_iterations):
                 logger.info("\n[ITER {}] Saving Checkpoint".format(iteration))
@@ -755,11 +772,15 @@ if __name__ == "__main__":
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
-    args.config_path = config_path
-    config_basename = os.path.splitext(os.path.basename(config_path))[0]
+
+    if args.config_path is None:
+        args.config_path = config_path
+    else:
+        print("Use param config file")
+
+    config_basename = os.path.splitext(os.path.basename(args.config_path))[0]
     init_recorder('record_' + config_basename + '.txt')
 
-    assert args.config_path is not None, "Please provide a config path"
     with open(args.config_path, 'r') as f:
         config = json.load(f)
     
