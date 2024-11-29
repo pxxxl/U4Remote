@@ -44,55 +44,45 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
         Q_scaling = 0.001
         Q_offsets = 0.2
         if is_training:
-            if step > pc.step_flag1 and step <= pc.step_flag2:
-                # quantization
-                feat = feat + torch.empty_like(feat).uniform_(-0.5, 0.5) * Q_feat
-                grid_scaling = grid_scaling + torch.empty_like(grid_scaling).uniform_(-0.5, 0.5) * Q_scaling
-                grid_offsets = grid_offsets + torch.empty_like(grid_offsets).uniform_(-0.5, 0.5) * Q_offsets
+            feat_context = pc.calc_interp_feat(anchor)
+            feat_context = pc.get_grid_mlp(feat_context)
+            mean, scale, mean_scaling, scale_scaling, mean_offsets, scale_offsets, Q_feat_adj, Q_scaling_adj, Q_offsets_adj = \
+                torch.split(feat_context, split_size_or_sections=[pc.feat_dim, pc.feat_dim, 6, 6, 3*pc.n_offsets, 3*pc.n_offsets, 1, 1, 1], dim=-1)
 
-            if step == pc.step_flag2:
-                pc.update_anchor_bound()
+            Q_feat = Q_feat * (1 + torch.tanh(Q_feat_adj))
+            Q_scaling = Q_scaling * (1 + torch.tanh(Q_scaling_adj))
+            Q_offsets = Q_offsets * (1 + torch.tanh(Q_offsets_adj))
+            feat = feat + torch.empty_like(feat).uniform_(-0.5, 0.5) * Q_feat
+            grid_scaling = grid_scaling + torch.empty_like(grid_scaling).uniform_(-0.5, 0.5) * Q_scaling
+            grid_offsets = grid_offsets + torch.empty_like(grid_offsets).uniform_(-0.5, 0.5) * Q_offsets.unsqueeze(1)
 
-            if step > pc.step_flag2:
-                feat_context = pc.calc_interp_feat(anchor)
-                feat_context = pc.get_grid_mlp(feat_context)
-                mean, scale, mean_scaling, scale_scaling, mean_offsets, scale_offsets, Q_feat_adj, Q_scaling_adj, Q_offsets_adj = \
-                    torch.split(feat_context, split_size_or_sections=[pc.feat_dim, pc.feat_dim, 6, 6, 3*pc.n_offsets, 3*pc.n_offsets, 1, 1, 1], dim=-1)
-
-                Q_feat = Q_feat * (1 + torch.tanh(Q_feat_adj))
-                Q_scaling = Q_scaling * (1 + torch.tanh(Q_scaling_adj))
-                Q_offsets = Q_offsets * (1 + torch.tanh(Q_offsets_adj))
-                feat = feat + torch.empty_like(feat).uniform_(-0.5, 0.5) * Q_feat
-                grid_scaling = grid_scaling + torch.empty_like(grid_scaling).uniform_(-0.5, 0.5) * Q_scaling
-                grid_offsets = grid_offsets + torch.empty_like(grid_offsets).uniform_(-0.5, 0.5) * Q_offsets.unsqueeze(1)
-
-                choose_idx = torch.rand_like(anchor[:, 0]) <= 0.05
-                feat_chosen = feat[choose_idx]
-                grid_scaling_chosen = grid_scaling[choose_idx]
-                grid_offsets_chosen = grid_offsets[choose_idx].view(-1, 3*pc.n_offsets)
-                mean = mean[choose_idx]
-                scale = scale[choose_idx]
-                mean_scaling = mean_scaling[choose_idx]
-                scale_scaling = scale_scaling[choose_idx]
-                mean_offsets = mean_offsets[choose_idx]
-                scale_offsets = scale_offsets[choose_idx]
-                Q_feat = Q_feat[choose_idx]
-                Q_scaling = Q_scaling[choose_idx]
-                Q_offsets = Q_offsets[choose_idx]
-                if pc.entropy_skipping_ratio is not None:
-                    bit_feat_raw = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
-                    bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), gaussian_skipping_ratio=pc.entropy_skipping_ratio)
-                    if pc.entropy_skipping_ratio > 0.0:
-                        print(bit_feat_raw.mean(), bit_feat.mean())
-                else:
-                    bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
-                bit_scaling = pc.entropy_gaussian.forward(grid_scaling_chosen, mean_scaling, scale_scaling, Q_scaling, pc.get_scaling.mean())
-                bit_offsets = pc.entropy_gaussian.forward(grid_offsets_chosen, mean_offsets, scale_offsets, Q_offsets, pc._offset.mean())
-                bit_per_feat_param = torch.sum(bit_feat) / bit_feat.numel()
-                bit_per_scaling_param = torch.sum(bit_scaling) / bit_scaling.numel()
-                bit_per_offsets_param = torch.sum(bit_offsets) / bit_offsets.numel()
-                bit_per_param = (torch.sum(bit_feat) + torch.sum(bit_scaling) + torch.sum(bit_offsets)) / \
-                                (bit_feat.numel() + bit_scaling.numel() + bit_offsets.numel())
+            choose_idx = torch.rand_like(anchor[:, 0]) <= 0.05
+            feat_chosen = feat[choose_idx]
+            grid_scaling_chosen = grid_scaling[choose_idx]
+            grid_offsets_chosen = grid_offsets[choose_idx].view(-1, 3*pc.n_offsets)
+            mean = mean[choose_idx]
+            scale = scale[choose_idx]
+            mean_scaling = mean_scaling[choose_idx]
+            scale_scaling = scale_scaling[choose_idx]
+            mean_offsets = mean_offsets[choose_idx]
+            scale_offsets = scale_offsets[choose_idx]
+            Q_feat = Q_feat[choose_idx]
+            Q_scaling = Q_scaling[choose_idx]
+            Q_offsets = Q_offsets[choose_idx]
+            if pc.entropy_skipping_ratio is not None:
+                bit_feat_raw = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
+                bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), gaussian_skipping_ratio=pc.entropy_skipping_ratio)
+                if pc.entropy_skipping_ratio > 0.0:
+                    print(bit_feat_raw.mean(), bit_feat.mean())
+            else:
+                bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
+            bit_scaling = pc.entropy_gaussian.forward(grid_scaling_chosen, mean_scaling, scale_scaling, Q_scaling, pc.get_scaling.mean())
+            bit_offsets = pc.entropy_gaussian.forward(grid_offsets_chosen, mean_offsets, scale_offsets, Q_offsets, pc._offset.mean())
+            bit_per_feat_param = torch.sum(bit_feat) / bit_feat.numel()
+            bit_per_scaling_param = torch.sum(bit_scaling) / bit_scaling.numel()
+            bit_per_offsets_param = torch.sum(bit_offsets) / bit_offsets.numel()
+            bit_per_param = (torch.sum(bit_feat) + torch.sum(bit_scaling) + torch.sum(bit_offsets)) / \
+                            (bit_feat.numel() + bit_scaling.numel() + bit_offsets.numel())
 
         elif not pc.decoded_version: # training时test
             torch.cuda.synchronize(); t1 = time.time()

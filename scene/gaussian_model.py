@@ -517,6 +517,10 @@ class GaussianModel(nn.Module):
         else:
             self.quantize_anchor_model = QuantizeAnchorModule()
 
+    def set_finetune_params(self, ite, ratio):
+        self.entropy_skipping_finetune_iterations = ite
+        self.entropy_skipping_finetune_ratio = ratio
+
     
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
@@ -588,6 +592,83 @@ class GaussianModel(nn.Module):
         if self.quantize_anchor_model is not None:
             self.anchor_quantize_scheduler_args = get_expon_lr_func(
                 lr_init=training_args.learned_anchor_digits_lr_init,
+                lr_final=training_args.learned_anchor_digits_lr_final,
+                lr_delay_mult=training_args.learned_anchor_digits_lr_delay_mult,
+                max_steps=training_args.learned_anchor_digits_lr_max_steps,
+                step_sub=0 if self.ste_binary else 10000,
+            )
+
+
+    def finetune_setup(self, training_args):
+        self.percent_dense = training_args.percent_dense
+
+        self.opacity_accum = torch.zeros((self.get_anchor.shape[0], 1), device="cuda")
+
+        self.offset_gradient_accum = torch.zeros((self.get_anchor.shape[0]*self.n_offsets, 1), device="cuda")
+        self.offset_denom = torch.zeros((self.get_anchor.shape[0]*self.n_offsets, 1), device="cuda")
+        self.anchor_demon = torch.zeros((self.get_anchor.shape[0], 1), device="cuda")
+
+        
+        l = [
+            {'params': [self._anchor], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "anchor"},
+            {'params': [self._offset], 'lr': training_args.offset_lr_final * self.spatial_lr_scale, "name": "offset"},
+            {'params': [self._anchor_feat], 'lr': training_args.feature_lr, "name": "anchor_feat"},
+            # {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
+            {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
+            # {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
+
+            {'params': self.mlp_opacity.parameters(), 'lr': training_args.mlp_opacity_lr_final, "name": "mlp_opacity"},
+            {'params': self.mlp_cov.parameters(), 'lr': training_args.mlp_cov_lr_final, "name": "mlp_cov"},
+            {'params': self.mlp_color.parameters(), 'lr': training_args.mlp_color_lr_final, "name": "mlp_color"},
+
+            {'params': self.encoding_xyz.parameters(), 'lr': training_args.encoding_xyz_lr_final, "name": "encoding_xyz"},
+            {'params': self.mlp_grid.parameters(), 'lr': training_args.mlp_grid_lr_final, "name": "mlp_grid"},
+
+        ]
+
+        if self.quantize_anchor_model is not None:
+            l.append({'params': self.quantize_anchor_model.parameters(), 'lr': training_args.learned_anchor_digits_lr_init, "name": "quantize_anchor_model"})
+
+        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+        self.anchor_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_final*self.spatial_lr_scale,
+                                                    lr_final=training_args.position_lr_final*self.spatial_lr_scale,
+                                                    lr_delay_mult=training_args.position_lr_delay_mult,
+                                                    max_steps=training_args.position_lr_max_steps)
+        self.offset_scheduler_args = get_expon_lr_func(lr_init=training_args.offset_lr_final*self.spatial_lr_scale,
+                                                    lr_final=training_args.offset_lr_final*self.spatial_lr_scale,
+                                                    lr_delay_mult=training_args.offset_lr_delay_mult,
+                                                    max_steps=training_args.offset_lr_max_steps)
+        self.mlp_opacity_scheduler_args = get_expon_lr_func(lr_init=training_args.mlp_opacity_lr_final,
+                                                    lr_final=training_args.mlp_opacity_lr_final,
+                                                    lr_delay_mult=training_args.mlp_opacity_lr_delay_mult,
+                                                    max_steps=training_args.mlp_opacity_lr_max_steps)
+
+        self.mlp_cov_scheduler_args = get_expon_lr_func(lr_init=training_args.mlp_cov_lr_final,
+                                                    lr_final=training_args.mlp_cov_lr_final,
+                                                    lr_delay_mult=training_args.mlp_cov_lr_delay_mult,
+                                                    max_steps=training_args.mlp_cov_lr_max_steps)
+
+        self.mlp_color_scheduler_args = get_expon_lr_func(lr_init=training_args.mlp_color_lr_final,
+                                                    lr_final=training_args.mlp_color_lr_final,
+                                                    lr_delay_mult=training_args.mlp_color_lr_delay_mult,
+                                                    max_steps=training_args.mlp_color_lr_max_steps)
+
+        self.encoding_xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.encoding_xyz_lr_final,
+                                                    lr_final=training_args.encoding_xyz_lr_final,
+                                                    lr_delay_mult=training_args.encoding_xyz_lr_delay_mult,
+                                                    max_steps=training_args.encoding_xyz_lr_max_steps,
+                                                             step_sub=0 if self.ste_binary else 10000,
+                                                             )
+        self.mlp_grid_scheduler_args = get_expon_lr_func(lr_init=training_args.mlp_grid_lr_final,
+                                                    lr_final=training_args.mlp_grid_lr_final,
+                                                    lr_delay_mult=training_args.mlp_grid_lr_delay_mult,
+                                                    max_steps=training_args.mlp_grid_lr_max_steps,
+                                                         step_sub=0 if self.ste_binary else 10000,
+                                                         )
+        
+        if self.quantize_anchor_model is not None:
+            self.anchor_quantize_scheduler_args = get_expon_lr_func(
+                lr_init=training_args.learned_anchor_digits_lr_final,
                 lr_final=training_args.learned_anchor_digits_lr_final,
                 lr_delay_mult=training_args.learned_anchor_digits_lr_delay_mult,
                 max_steps=training_args.learned_anchor_digits_lr_max_steps,
